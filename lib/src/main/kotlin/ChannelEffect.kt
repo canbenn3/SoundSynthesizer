@@ -1,0 +1,77 @@
+package synthesizer
+
+import kotlin.math.tanh
+
+// Decorator base: an effect is itself a Channel that wraps another Channel and
+// transforms the samples produced by it.
+abstract class ChannelEffect(protected val channel: Channel) : Channel(channel) {
+    abstract override fun getSampleStream(): DoubleArray
+}
+
+// Scales the whole stream by a constant gain (0.0 = silence, 1.0 = unchanged).
+class VolumeEffect(channel: Channel, private val level: Double) : ChannelEffect(channel) {
+    override fun getSampleStream(): DoubleArray {
+        val stream = channel.getSampleStream()
+        for (i in stream.indices) {
+            stream[i] *= level
+        }
+        return stream
+    }
+}
+
+// Applies an Attack/Decay/Sustain amplitude envelope, restarted for every note.
+// attackStart: seconds spent ramping 0 -> 1.
+// decayStart:  seconds (from note start) at which the sustain level is reached.
+// sustain:     the level held after decay until the note ends.
+class AttackDecaySustainEffect(
+        channel: Channel,
+        private val attackStart: Double,
+        private val decayStart: Double,
+        private val sustain: Double
+) : ChannelEffect(channel) {
+    override fun getSampleStream(): DoubleArray {
+        val stream = channel.getSampleStream()
+        var index = 0
+        for (note in notes) {
+            val length = noteLengthSamples(note)
+            for (i in 0 until length) {
+                if (index >= stream.size) break
+                stream[index] *= envelope(i / sampleRate)
+                index++
+            }
+        }
+        return stream
+    }
+
+    private fun envelope(t: Double): Double = when {
+        attackStart > 0.0 && t < attackStart -> t / attackStart
+        t < decayStart -> {
+            if (decayStart <= attackStart) sustain
+            else 1.0 - (1.0 - sustain) * (t - attackStart) / (decayStart - attackStart)
+        }
+        else -> sustain
+    }
+}
+
+// Soft-clipping distortion. Higher drive pushes the signal harder into the
+// tanh curve, rounding peaks toward a square-ish shape.
+class TanhEffect(channel: Channel, private val drive: Double) : ChannelEffect(channel) {
+    override fun getSampleStream(): DoubleArray {
+        val stream = channel.getSampleStream()
+        for (i in stream.indices) {
+            stream[i] = tanh(drive * stream[i])
+        }
+        return stream
+    }
+}
+
+// Hard-clipping distortion: anything beyond +/- threshold is flattened.
+class ClipEffect(channel: Channel, private val threshold: Double) : ChannelEffect(channel) {
+    override fun getSampleStream(): DoubleArray {
+        val stream = channel.getSampleStream()
+        for (i in stream.indices) {
+            stream[i] = stream[i].coerceIn(-threshold, threshold)
+        }
+        return stream
+    }
+}
