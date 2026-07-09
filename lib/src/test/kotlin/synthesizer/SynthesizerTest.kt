@@ -15,18 +15,78 @@ class SynthesizerTest {
     }
 
     @Test fun rejectsUnknownNote() {
-        val path = TestHelpers.writeTempSong("44100 4 120\nsin|X9 1")
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin|X9 4")
         assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
     }
 
     @Test fun rejectsUnknownWaveform() {
-        val path = TestHelpers.writeTempSong("44100 4 120\ntriangle|C4 1")
+        val path = TestHelpers.writeTempSong("44100 4 120\ntriangle|C4 4")
         assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
     }
 
     @Test fun rejectsUnknownEffect() {
-        val path = TestHelpers.writeTempSong("44100 4 120\nsin reverb$0.5|C4 1")
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin reverb$0.5|C4 4")
         assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+    }
+
+    @Test fun rejectsMeasureWithTooFewBeats() {
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin|C4 3")
+        val error = assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+        assertTrue(error.message!!.contains("3") && error.message!!.contains("expected 4"))
+    }
+
+    @Test fun rejectsMeasureWithTooManyBeats() {
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin|C4 1 C4 1 C4 1 C4 1 C4 1")
+        val error = assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+        assertTrue(error.message!!.contains("5") && error.message!!.contains("expected 4"))
+    }
+
+    @Test fun rejectsMeasureWithMismatchedBeatsAcrossMeasures() {
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin|C4 4|D4 3")
+        val error = assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+        assertTrue(error.message!!.contains("Measure 2"))
+    }
+
+    @Test fun rejectsChannelWithoutWaveform() {
+        val path = TestHelpers.writeTempSong("44100 4 120\nvol$0.5|C4 4")
+        val error = assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+        assertTrue(error.message!!.contains("waveform"))
+    }
+
+    @Test fun rejectsChannelStartingWithEffectName() {
+        val path = TestHelpers.writeTempSong("44100 4 120\nads$0.1$0.2$0.3|C4 4")
+        val error = assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+        assertTrue(error.message!!.contains("waveform"))
+    }
+
+    @Test fun rejectsEmptyChannelHeader() {
+        val path = TestHelpers.writeTempSong("44100 4 120\n|C4 4")
+        val error = assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+        assertTrue(error.message!!.contains("waveform"))
+    }
+
+    @Test fun rejectsEffectWithNoArguments() {
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin vol|C4 4")
+        val error = assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+        assertTrue(error.message!!.contains("not enough arguments"))
+    }
+
+    @Test fun rejectsEffectWithMissingParameter() {
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin vol$|C4 4")
+        val error = assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+        assertTrue(error.message!!.contains("not enough arguments"))
+    }
+
+    @Test fun rejectsAdsEffectWithTooFewArguments() {
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin ads$0.1$0.2|C4 4")
+        val error = assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+        assertTrue(error.message!!.contains("ads requires 3 arguments"))
+    }
+
+    @Test fun rejectsTanhEffectWithTooFewArguments() {
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin tanh|C4 4")
+        val error = assertFailsWith<IllegalArgumentException> { synth.renderFile(path) }
+        assertTrue(error.message!!.contains("not enough arguments"))
     }
 
     @Test fun rendersAllSupportedWaveforms() {
@@ -77,15 +137,15 @@ class SynthesizerTest {
     }
 
     @Test fun fractionalBeatsParseCorrectly() {
-        val path = TestHelpers.writeTempSong("44100 4 120\nsin|C4 .5 D4 .5 E4 .5 F4 .5")
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin|C4 .5 D4 .5 E4 .5 F4 .5 G4 1 G4 1")
         val samples = synth.renderFile(path)
-        assertEquals(TestHelpers.samplesForBeats(2.0), samples.size)
+        assertEquals(TestHelpers.samplesForBeats(4.0), samples.size)
     }
 
     @Test fun multipleMeasuresConcatenate() {
-        val path = TestHelpers.writeTempSong("44100 4 120\nsin|C4 1|D4 1|E4 1|F4 1")
+        val path = TestHelpers.writeTempSong("44100 4 120\nsin|C4 4|D4 4|E4 4|F4 4")
         val samples = synth.renderFile(path)
-        assertEquals(TestHelpers.samplesForBeats(4.0), samples.size)
+        assertEquals(TestHelpers.samplesForBeats(16.0), samples.size)
     }
 
     @Test fun channelWithOnlyEffectsHeaderAndNoNotesIsEmpty() {

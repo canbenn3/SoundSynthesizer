@@ -11,6 +11,9 @@ data class FileHeader(val sampleRate: Double, val beatsPerMeasure: Double, val t
 data class ChannelHeader(val waveForm: String, val effects: List<String>)
 
 class Synthesizer {
+    private val waveForms = setOf("sin", "square", "saw", "noise")
+    private val effectNames = setOf("vol", "ads", "tanh", "clip")
+
     fun playFile(filename: String) {
         val header = readFileHeader(readFile(filename).lines().first { it.isNotBlank() })
         // 6. Play that sucker!
@@ -45,7 +48,7 @@ class Synthesizer {
     private fun buildChannel(line: String, header: FileHeader): Channel {
         val sections = line.split("|")
         val channelHeader = readChannelHeader(sections.first())
-        val notes = parseNotes(sections.drop(1))
+        val notes = parseNotes(sections.drop(1), header.beatsPerMeasure)
 
         var channel: Channel =
                 Channel(
@@ -64,10 +67,19 @@ class Synthesizer {
 
     // Parse the measures of a channel line into a flat list of notes.
     // Each measure is a space separated sequence of "<note> <duration>" pairs.
-    private fun parseNotes(measures: List<String>): List<Note> {
+    private fun parseNotes(measures: List<String>, beatsPerMeasure: Double): List<Note> {
         val notes = mutableListOf<Note>()
-        for (measure in measures) {
+        for ((index, measure) in measures.withIndex()) {
             val tokens = measure.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+            if (tokens.isEmpty()) continue
+
+            if (tokens.size % 2 != 0) {
+                throw IllegalArgumentException(
+                        "Measure ${index + 1} has incomplete note/duration pair(s)"
+                )
+            }
+
+            var measureBeats = 0.0
             var i = 0
             while (i + 1 < tokens.size) {
                 val name = tokens[i]
@@ -75,7 +87,14 @@ class Synthesizer {
                 val frequency =
                         PianoNotes[name] ?: throw IllegalArgumentException("Unknown note '$name'")
                 notes.add(Note(frequency, beats))
+                measureBeats += beats
                 i += 2
+            }
+
+            if (abs(measureBeats - beatsPerMeasure) > 1e-9) {
+                throw IllegalArgumentException(
+                        "Measure ${index + 1} has $measureBeats beats, expected $beatsPerMeasure"
+                )
             }
         }
         return notes
@@ -94,12 +113,44 @@ class Synthesizer {
     private fun applyEffect(channel: Channel, effect: String): Channel {
         val parts = effect.split("$")
         val name = parts.first()
-        val params = parts.drop(1).map { it.toDouble() }
+        if (name.isEmpty()) {
+            throw IllegalArgumentException("Improperly formatted effect '$effect'")
+        }
+
+        val paramStrings = parts.drop(1)
+        if (paramStrings.isEmpty() || paramStrings.any { it.isEmpty() }) {
+            throw IllegalArgumentException(
+                    "Improperly formatted effect '$effect': not enough arguments"
+            )
+        }
+        val params = paramStrings.map { it.toDouble() }
+
+        // TODO: Make this a factory someday :)
         return when (name) {
-            "vol" -> VolumeEffect(channel, params[0])
-            "ads" -> AttackDecaySustainEffect(channel, params[0], params[1], params[2])
-            "tanh" -> TanhEffect(channel, params[0])
-            "clip" -> ClipEffect(channel, params[0])
+            "vol" -> {
+                require(params.size >= 1) {
+                    "Improperly formatted effect '$effect': vol requires 1 argument"
+                }
+                VolumeEffect(channel, params[0])
+            }
+            "ads" -> {
+                require(params.size >= 3) {
+                    "Improperly formatted effect '$effect': ads requires 3 arguments"
+                }
+                AttackDecaySustainEffect(channel, params[0], params[1], params[2])
+            }
+            "tanh" -> {
+                require(params.size >= 1) {
+                    "Improperly formatted effect '$effect': tanh requires 1 argument"
+                }
+                TanhEffect(channel, params[0])
+            }
+            "clip" -> {
+                require(params.size >= 1) {
+                    "Improperly formatted effect '$effect': clip requires 1 argument"
+                }
+                ClipEffect(channel, params[0])
+            }
             else -> throw IllegalArgumentException("Unknown effect '$name'")
         }
     }
@@ -118,10 +169,22 @@ class Synthesizer {
 
     // Extract wave types and channel effects from a channel line.
     private fun readChannelHeader(line: String): ChannelHeader {
-        val tokens = line.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-        val waveForm = tokens.first()
-        val effects = tokens.drop(1)
-        return ChannelHeader(waveForm, effects)
+        val trimmed = line.trim()
+        if (trimmed.isEmpty()) {
+            throw IllegalArgumentException("Channel must specify a waveform")
+        }
+
+        val tokens = trimmed.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val waveFormToken = tokens.first()
+        if (waveFormToken !in waveForms) {
+            val effectName = waveFormToken.substringBefore("$")
+            if (effectName in effectNames) {
+                throw IllegalArgumentException("Channel must specify a waveform")
+            }
+            throw IllegalArgumentException("Unknown waveform '$waveFormToken'")
+        }
+
+        return ChannelHeader(waveFormToken, tokens.drop(1))
     }
 
     private fun mixAndNormalizeStreams(streams: List<DoubleArray>): DoubleArray {
