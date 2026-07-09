@@ -10,7 +10,8 @@ class ChannelEffectTest {
     private fun squareChannel(vararg noteSpecs: Pair<String, Double>) =
             TestHelpers.channel(
                     waveGenerator = SquareWaveGenerator(),
-                    notes = noteSpecs.map { (name, beats) -> TestHelpers.note(name, beats) }
+                    notesText = TestHelpers.measure(*noteSpecs),
+                    beatsPerMeasure = TestHelpers.measureBeats(*noteSpecs)
             )
 
     @Test fun volumeScalesEverySample() {
@@ -38,7 +39,7 @@ class ChannelEffectTest {
     }
 
     @Test fun clipLeavesQuietSignalUnchanged() {
-        val base = TestHelpers.channel(notes = listOf(TestHelpers.note("C4", 0.01)))
+        val base = TestHelpers.channel(notesText = "C4 0.01", beatsPerMeasure = 0.01)
         val quiet = VolumeEffect(base, 0.1).getSampleStream()
         val clipped = ClipEffect(VolumeEffect(base, 0.1), 0.5).getSampleStream()
         assertEquals(quiet.size, clipped.size)

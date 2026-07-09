@@ -33,16 +33,18 @@ abstract class Channel(
         protected val sampleRate: Double,
         protected val beatsPerMeasure: Double,
         protected val tempo: Double,
-        protected val notes: List<Note>
+        protected val notesText: String
 ) {
+    protected val notes: List<Note> = parseNotes(notesText, beatsPerMeasure)
+
     // Copy constructor used by ChannelEffect decorators so they share the
-    // wrapped channel's timing settings (needed to line effects up per note).
+    // wrapped channel's timing settings and note data.
     protected constructor(channel: Channel) : this(
             channel.waveGenerator,
             channel.sampleRate,
             channel.beatsPerMeasure,
             channel.tempo,
-            channel.notes
+            channel.notesText
     )
 
     // Number of audio samples in one beat at the current tempo.
@@ -113,21 +115,7 @@ class BasicChannel : Channel {
             beatsPerMeasure: Double,
             tempo: Double,
             notesText: String
-    ) : super(
-            waveGenerator,
-            sampleRate,
-            beatsPerMeasure,
-            tempo,
-            parseNotes(notesText, beatsPerMeasure)
-    )
-
-    constructor(
-            waveGenerator: WaveGenerator,
-            sampleRate: Double,
-            beatsPerMeasure: Double,
-            tempo: Double,
-            notes: List<Note>
-    ) : super(waveGenerator, sampleRate, beatsPerMeasure, tempo, notes)
+    ) : super(waveGenerator, sampleRate, beatsPerMeasure, tempo, notesText)
 
     constructor(channel: Channel) : super(channel)
 

@@ -23,13 +23,16 @@ class ChannelTest {
     }
 
     @Test fun singleNoteProducesCorrectSampleCount() {
-        val channel = TestHelpers.channel(notes = listOf(TestHelpers.note("C4", 1.0)))
+        val channel = TestHelpers.channel(notesText = "C4 1", beatsPerMeasure = 1.0)
         assertEquals(TestHelpers.samplesForBeats(1.0), channel.getSampleStream().size)
     }
 
     @Test fun multipleNotesConcatenateSampleCounts() {
-        val notes = listOf(TestHelpers.note("C4", 1.0), TestHelpers.note("D4", 2.0), TestHelpers.note("E4", 0.5))
-        val channel = TestHelpers.channel(notes = notes)
+        val channel =
+                TestHelpers.channel(
+                        notesText = "C4 1 D4 2 E4 0.5",
+                        beatsPerMeasure = 3.5
+                )
         val expected = TestHelpers.samplesForBeats(1.0) +
                 TestHelpers.samplesForBeats(2.0) +
                 TestHelpers.samplesForBeats(0.5)
@@ -37,54 +40,53 @@ class ChannelTest {
     }
 
     @Test fun restNoteIsSilent() {
-        val channel = TestHelpers.channel(notes = listOf(Note(0.0, 1.0)))
+        val channel = TestHelpers.channel(notesText = "- 1", beatsPerMeasure = 1.0)
         assertTrue(channel.getSampleStream().all { it == 0.0 })
     }
 
     @Test fun sineNoteStartsAtZeroPhase() {
-        val freq = PianoNotes["C4"]!!
-        val channel = TestHelpers.channel(notes = listOf(Note(freq, 1.0)))
+        val channel = TestHelpers.channel(notesText = "C4 1", beatsPerMeasure = 1.0)
         val stream = channel.getSampleStream()
+        val freq = PianoNotes["C4"]!!
         assertEquals(0.0, stream[0], 1e-10)
         val expected = sin(2 * PI * freq / TestHelpers.SAMPLE_RATE)
         assertEquals(expected, stream[1], 1e-10)
     }
 
     @Test fun phaseResetsAtEachNote() {
-        val freq = PianoNotes["C4"]!!
-        val channel = TestHelpers.channel(notes = listOf(Note(freq, 0.25), Note(freq, 0.25)))
+        val channel = TestHelpers.channel(notesText = "C4 0.25 C4 0.25", beatsPerMeasure = 0.5)
         val stream = channel.getSampleStream()
         val boundary = TestHelpers.samplesForBeats(0.25)
         assertEquals(0.0, stream[boundary], 1e-10, "phase should reset at note boundary")
     }
 
     @Test fun squareWaveProducesFullScaleSamples() {
-        val channel = TestHelpers.channel(
-                waveGenerator = SquareWaveGenerator(),
-                notes = listOf(TestHelpers.note("C4", 1.0))
-        )
+        val channel =
+                TestHelpers.channel(
+                        waveGenerator = SquareWaveGenerator(),
+                        notesText = "C4 1",
+                        beatsPerMeasure = 1.0
+                )
         val stream = channel.getSampleStream()
         assertTrue(stream.any { it == 1.0 })
         assertTrue(stream.any { it == -1.0 })
     }
 
     @Test fun tempoAffectsSampleLength() {
-        val notes = listOf(TestHelpers.note("C4", 1.0))
-        val slow = TestHelpers.channel(notes = notes, tempo = 60.0)
-        val fast = TestHelpers.channel(notes = notes, tempo = 240.0)
+        val slow = TestHelpers.channel(notesText = "C4 1", beatsPerMeasure = 1.0, tempo = 60.0)
+        val fast = TestHelpers.channel(notesText = "C4 1", beatsPerMeasure = 1.0, tempo = 240.0)
         assertTrue(slow.getSampleStream().size > fast.getSampleStream().size)
         assertEquals(4, slow.getSampleStream().size / fast.getSampleStream().size)
     }
 
     @Test fun copyConstructorPreservesStream() {
-        val original = TestHelpers.channel(notes = listOf(TestHelpers.note("G4", 1.0)))
+        val original = TestHelpers.channel(notesText = "G4 1", beatsPerMeasure = 1.0)
         val copy = BasicChannel(original)
         assertEquals(original.getSampleStream().toList(), copy.getSampleStream().toList())
     }
 
     @Test fun mixedRestAndTonePreservesTiming() {
-        val notes = listOf(Note(0.0, 1.0), TestHelpers.note("C4", 1.0))
-        val channel = TestHelpers.channel(notes = notes)
+        val channel = TestHelpers.channel(notesText = "- 1 C4 1", beatsPerMeasure = 2.0)
         val stream = channel.getSampleStream()
         val restSamples = TestHelpers.samplesForBeats(1.0)
         assertTrue(stream.take(restSamples).all { it == 0.0 })
@@ -92,7 +94,7 @@ class ChannelTest {
     }
 
     @Test fun parseNotesFromTextBuildsValidChannel() {
-        val channel = TestHelpers.channelFromText(notesText = "C4 4")
+        val channel = TestHelpers.channel(notesText = "C4 4")
         assertEquals(TestHelpers.samplesForBeats(4.0), channel.getSampleStream().size)
     }
 

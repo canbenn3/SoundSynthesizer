@@ -36,19 +36,14 @@ object TestHelpers {
 
     fun channel(
             waveGenerator: WaveGenerator = SineWaveGenerator(),
-            notes: List<Note>,
-            sampleRate: Double = SAMPLE_RATE,
-            beatsPerMeasure: Double = BEATS_PER_MEASURE,
-            tempo: Double = TEMPO
-    ) = BasicChannel(waveGenerator, sampleRate, beatsPerMeasure, tempo, notes)
-
-    fun channelFromText(
-            waveGenerator: WaveGenerator = SineWaveGenerator(),
             notesText: String,
             sampleRate: Double = SAMPLE_RATE,
             beatsPerMeasure: Double = BEATS_PER_MEASURE,
             tempo: Double = TEMPO
     ) = BasicChannel(waveGenerator, sampleRate, beatsPerMeasure, tempo, notesText)
 
-    fun note(name: String, beats: Double) = Note(PianoNotes[name]!!, beats)
+    fun measure(vararg pairs: Pair<String, Double>): String =
+            pairs.joinToString(" ") { (name, beats) -> "$name $beats" }
+
+    fun measureBeats(vararg pairs: Pair<String, Double>): Double = pairs.sumOf { it.second }
 }
