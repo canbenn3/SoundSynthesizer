@@ -5,6 +5,7 @@ import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class ChannelTest {
@@ -77,7 +78,7 @@ class ChannelTest {
 
     @Test fun copyConstructorPreservesStream() {
         val original = TestHelpers.channel(notes = listOf(TestHelpers.note("G4", 1.0)))
-        val copy = Channel(original)
+        val copy = BasicChannel(original)
         assertEquals(original.getSampleStream().toList(), copy.getSampleStream().toList())
     }
 
@@ -88,5 +89,16 @@ class ChannelTest {
         val restSamples = TestHelpers.samplesForBeats(1.0)
         assertTrue(stream.take(restSamples).all { it == 0.0 })
         assertTrue(stream.drop(restSamples).any { abs(it) > 0.0 })
+    }
+
+    @Test fun parseNotesFromTextBuildsValidChannel() {
+        val channel = TestHelpers.channelFromText(notesText = "C4 4")
+        assertEquals(TestHelpers.samplesForBeats(4.0), channel.getSampleStream().size)
+    }
+
+    @Test fun parseNotesRejectsIncompletePairs() {
+        assertFailsWith<ImproperNoteException> {
+            Channel.parseNotes("C4", TestHelpers.BEATS_PER_MEASURE)
+        }
     }
 }

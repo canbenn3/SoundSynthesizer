@@ -35,7 +35,7 @@ class RenderTest {
 
     @Test fun eachWaveformFixtureRenders() {
         val synth = Synthesizer()
-        for (name in listOf("wave_sine.txt", "wave_square.txt", "wave_saw.txt")) {
+        for (name in listOf("wave_sine.txt", "wave_square.txt", "wave_saw.txt", "wave_noise.txt")) {
             val samples = synth.renderFile(TestHelpers.song(name))
             assertEquals(TestHelpers.samplesForBeats(16.0), samples.size, name)
             assertEquals(1.0, samples.maxOf { abs(it) }, 1e-10, "$name should normalize to full scale")
@@ -65,7 +65,8 @@ class RenderTest {
                         "mary_had_a_little_lamb.txt",
                         "ode_to_joy.txt",
                         "amazing_grace.txt",
-                        "frere_jacques_round.txt"
+                        "frere_jacques_round.txt",
+                        "jingle_bells.txt"
                 )) {
             val samples = synth.renderFile(TestHelpers.song(name))
             assertTrue(samples.isNotEmpty(), name)

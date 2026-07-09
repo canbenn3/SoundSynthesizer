@@ -40,7 +40,15 @@ object TestHelpers {
             sampleRate: Double = SAMPLE_RATE,
             beatsPerMeasure: Double = BEATS_PER_MEASURE,
             tempo: Double = TEMPO
-    ) = Channel(waveGenerator, sampleRate, beatsPerMeasure, tempo, notes)
+    ) = BasicChannel(waveGenerator, sampleRate, beatsPerMeasure, tempo, notes)
+
+    fun channelFromText(
+            waveGenerator: WaveGenerator = SineWaveGenerator(),
+            notesText: String,
+            sampleRate: Double = SAMPLE_RATE,
+            beatsPerMeasure: Double = BEATS_PER_MEASURE,
+            tempo: Double = TEMPO
+    ) = BasicChannel(waveGenerator, sampleRate, beatsPerMeasure, tempo, notesText)
 
     fun note(name: String, beats: Double) = Note(PianoNotes[name]!!, beats)
 }

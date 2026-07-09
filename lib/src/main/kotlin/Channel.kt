@@ -1,5 +1,6 @@
 package synthesizer
 
+import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -27,16 +28,16 @@ object PianoNotes {
 // A single note: its frequency in Hz (0.0 for a rest) and its length in beats.
 data class Note(val frequency: Double, val beats: Double)
 
-open class Channel(
+abstract class Channel(
         protected val waveGenerator: WaveGenerator,
         protected val sampleRate: Double,
         protected val beatsPerMeasure: Double,
         protected val tempo: Double,
         protected val notes: List<Note>
 ) {
-    // Copy constructor used by the ChannelEffect decorators so they share the
+    // Copy constructor used by ChannelEffect decorators so they share the
     // wrapped channel's timing settings (needed to line effects up per note).
-    constructor(channel: Channel) : this(
+    protected constructor(channel: Channel) : this(
             channel.waveGenerator,
             channel.sampleRate,
             channel.beatsPerMeasure,
@@ -53,8 +54,84 @@ open class Channel(
     protected fun noteLengthSamples(note: Note): Int =
             (note.beats * samplesPerBeat).roundToInt()
 
-    // Render every note into a single continuous stream of samples.
-    open fun getSampleStream(): DoubleArray {
+    abstract fun getSampleStream(): DoubleArray
+
+    companion object {
+        // Parse pipe-delimited measure text into a flat list of notes.
+        // Each measure is a space-separated sequence of "<note> <duration>" pairs.
+        fun parseNotes(measuresText: String, beatsPerMeasure: Double): List<Note> {
+            if (measuresText.isBlank()) return emptyList()
+
+            val notes = mutableListOf<Note>()
+            val measures = measuresText.split("|")
+            for ((index, measure) in measures.withIndex()) {
+                val tokens = measure.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                if (tokens.isEmpty()) continue
+
+                if (tokens.size % 2 != 0) {
+                    throw ImproperNoteException(
+                            "Measure ${index + 1} has incomplete note/duration pair(s)"
+                    )
+                }
+
+                var measureBeats = 0.0
+                var i = 0
+                while (i + 1 < tokens.size) {
+                    val name = tokens[i]
+                    val beats =
+                            try {
+                                tokens[i + 1].toDouble()
+                            } catch (_: NumberFormatException) {
+                                throw ImproperNoteException(
+                                        "Measure ${index + 1}: invalid duration '${tokens[i + 1]}'"
+                                )
+                            }
+                    val frequency =
+                            PianoNotes[name]
+                                    ?: throw ImproperNoteException("Unknown note '$name'")
+                    notes.add(Note(frequency, beats))
+                    measureBeats += beats
+                    i += 2
+                }
+
+                if (abs(measureBeats - beatsPerMeasure) > 1e-9) {
+                    throw ImproperNoteException(
+                            "Measure ${index + 1} has $measureBeats beats, expected $beatsPerMeasure"
+                    )
+                }
+            }
+            return notes
+        }
+    }
+}
+
+// Baseline channel: renders notes from a wave generator without effects.
+class BasicChannel : Channel {
+    constructor(
+            waveGenerator: WaveGenerator,
+            sampleRate: Double,
+            beatsPerMeasure: Double,
+            tempo: Double,
+            notesText: String
+    ) : super(
+            waveGenerator,
+            sampleRate,
+            beatsPerMeasure,
+            tempo,
+            parseNotes(notesText, beatsPerMeasure)
+    )
+
+    constructor(
+            waveGenerator: WaveGenerator,
+            sampleRate: Double,
+            beatsPerMeasure: Double,
+            tempo: Double,
+            notes: List<Note>
+    ) : super(waveGenerator, sampleRate, beatsPerMeasure, tempo, notes)
+
+    constructor(channel: Channel) : super(channel)
+
+    override fun getSampleStream(): DoubleArray {
         val totalSamples = notes.sumOf { noteLengthSamples(it) }
         val stream = DoubleArray(totalSamples)
 
