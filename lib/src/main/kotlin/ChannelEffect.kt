@@ -8,7 +8,7 @@ abstract class ChannelEffect(protected val channel: Channel) : Channel(channel) 
     abstract override fun getSampleStream(): DoubleArray
 }
 
-// Scales the whole stream by a constant gain (0.0 = silence, 1.0 = unchanged).
+// vol$level — scales the channel's amplitude.
 class VolumeEffect(channel: Channel, private val level: Double) : ChannelEffect(channel) {
     override fun getSampleStream(): DoubleArray {
         val stream = channel.getSampleStream()
@@ -19,14 +19,14 @@ class VolumeEffect(channel: Channel, private val level: Double) : ChannelEffect(
     }
 }
 
-// Applies an Attack/Decay/Sustain amplitude envelope, restarted for every note.
-// attackStart: seconds spent ramping 0 -> 1.
-// decayStart:  seconds (from note start) at which the sustain level is reached.
-// sustain:     the level held after decay until the note ends.
+// ads$attackEnd$decayEnd$sustain — Attack-Decay-Sustain envelope, restarted per note.
+// attackEnd: time (seconds) at which the attack ramp ends.
+// decayEnd:  time (seconds) at which the decay ends.
+// sustain:   level held afterward until the note ends.
 class AttackDecaySustainEffect(
         channel: Channel,
-        private val attackStart: Double,
-        private val decayStart: Double,
+        private val attackEnd: Double,
+        private val decayEnd: Double,
         private val sustain: Double
 ) : ChannelEffect(channel) {
     override fun getSampleStream(): DoubleArray {
@@ -43,18 +43,17 @@ class AttackDecaySustainEffect(
         return stream
     }
 
-    private fun envelope(t: Double): Double = when {
-        attackStart > 0.0 && t < attackStart -> t / attackStart
-        t < decayStart -> {
-            if (decayStart <= attackStart) sustain
-            else 1.0 - (1.0 - sustain) * (t - attackStart) / (decayStart - attackStart)
+    private fun envelope(secondsIntoNote: Double): Double = when {
+        attackEnd > 0.0 && secondsIntoNote < attackEnd -> secondsIntoNote / attackEnd
+        secondsIntoNote < decayEnd -> {
+            if (decayEnd <= attackEnd) sustain
+            else 1.0 - (1.0 - sustain) * (secondsIntoNote - attackEnd) / (decayEnd - attackEnd)
         }
         else -> sustain
     }
 }
 
-// Soft-clipping distortion. Higher drive pushes the signal harder into the
-// tanh curve, rounding peaks toward a square-ish shape.
+// tanh$drive — tanh distortion; drive is the amount of drive applied.
 class TanhEffect(channel: Channel, private val drive: Double) : ChannelEffect(channel) {
     override fun getSampleStream(): DoubleArray {
         val stream = channel.getSampleStream()
@@ -65,7 +64,7 @@ class TanhEffect(channel: Channel, private val drive: Double) : ChannelEffect(ch
     }
 }
 
-// Hard-clipping distortion: anything beyond +/- threshold is flattened.
+// clip$threshold — clip distortion; signal is clamped to +/- threshold.
 class ClipEffect(channel: Channel, private val threshold: Double) : ChannelEffect(channel) {
     override fun getSampleStream(): DoubleArray {
         val stream = channel.getSampleStream()
